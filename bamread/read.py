@@ -9,12 +9,12 @@ from bamread.src.bamread import _bamread, _bamread_all  # type: ignore
 def read_bam(
     f: Path, mapq: int = 0, required_flag: int = 0, filter_flag: int = 1540
 ) -> pd.DataFrame:
-    chromosomes, starts, ends, strands, flags, chrmap = _bamread(
+    chromosomes, starts, ends, strands, flags, cbids, chrmap, cbmap = _bamread(
         f, mapq, required_flag, filter_flag
     )
 
-    chromosomes, ends, flags, starts, strands = _create_series(
-        chrmap, chromosomes, ends, flags, starts, strands
+    chromosomes, ends, flags, starts, strands, cbs = _create_series(
+        chrmap, chromosomes, ends, flags, starts, strands, cbmap, cbids,
     )
 
     return pd.DataFrame(
@@ -24,19 +24,21 @@ def read_bam(
             "End": ends,
             "Strand": strands,
             "Flag": flags,
+            "CB": cbs,
         }
     )
 
 
 def _create_series(
-    chrmap, chromosomes, ends, flags, starts, strands
-) -> Tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
-    chromosomes = pd.Series(chromosomes).replace(chrmap).astype("category")
+    chrmap, chromosomes, ends, flags, starts, strands, cbmap, cbids,
+) -> Tuple[pd.Series, pd.Series, pd.Series, pd.Series, pd.Series, pd.Series]:
+    chromosomes = pd.Categorical.from_codes(chromosomes, categories=chrmap)
     starts = pd.Series(starts)
     ends = pd.Series(ends)
     strands = pd.Series(strands).replace({16: "-", 0: "+"}).astype("category")
     flags = pd.Series(flags)
-    return chromosomes, ends, flags, starts, strands
+    cbs = pd.Categorical.from_codes(cbids, categories=cbmap)
+    return chromosomes, ends, flags, starts, strands, cbs
 
 
 def read_bam_full(
@@ -48,7 +50,9 @@ def read_bam_full(
         ends,
         strands,
         flags,
+        cbids,
         chrmap,
+        cbmap,
         qstarts,
         qends,
         query_names,
@@ -57,8 +61,8 @@ def read_bam_full(
         query_qualities,
     ) = _bamread_all(f, mapq, required_flag, filter_flag)
 
-    chromosomes, ends, flags, starts, strands = _create_series(
-        chrmap, chromosomes, ends, flags, starts, strands
+    chromosomes, ends, flags, starts, strands, cbs = _create_series(
+        chrmap, chromosomes, ends, flags, starts, strands, cbmap, cbids,
     )
     qstarts = pd.Series(qstarts)
     qends = pd.Series(qends)
@@ -80,5 +84,6 @@ def read_bam_full(
             "Name": query_names,
             "Cigar": cigarstrings,
             "Quality": query_qualities,
+            "CB": cbs,
         }
     )
